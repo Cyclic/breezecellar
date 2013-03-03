@@ -1,4 +1,4 @@
-# Breeze Cellar Sample Application with BreezeJS, <model library TBD>, Twitter Bootstrap, Node.js, Express, and MongoDB #
+# Breeze Cellar Sample Application with BreezeJS, [model library TBD], Twitter Bootstrap, Node.js, Express, and MongoDB #
 
 Forked from [the repo of its original author](https://github.com/ccoenraets/nodecellar), [Christophe Coenraets](http://coenraets.org/blog/).
 

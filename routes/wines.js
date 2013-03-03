@@ -1,29 +1,80 @@
+
+console.log('trying to connect');
+
 var mongo = require('mongodb');
+var url = require('url');
+var util = require('util');
 
 var Server = mongo.Server,
-    Db = mongo.Db,
-    BSON = mongo.BSONPure;
+    Db = mongo.Db;
 
-var server = new Server('localhost', 27017, {auto_reconnect: true});
-db = new Db('winedb', server, {safe: true});
+var parsedUrl = url.parse(process.env.mongo_url);
 
-db.open(function(err, db) {
-    if(!err) {
-        console.log("Connected to 'winedb' database");
-        db.collection('wines', {safe:true}, function(err, collection) {
-            if (err) {
-                console.log("The 'wines' collection doesn't exist. Creating it with sample data...");
-                populateDB();
-            }
-        });
-    }
+var dbSettings = {
+  host:     parsedUrl.hostname,
+  port:     parseInt(parsedUrl.port || 27017, 10),
+  name:     parsedUrl.pathname.substr(1),
+  user:     parsedUrl.auth ? parsedUrl.auth.split(':')[0] : null,
+  password: parsedUrl.auth ? parsedUrl.auth.split(':')[1] : null
+};
+
+var server = new Server(dbSettings.host, dbSettings.port, {
+    auto_reconnect: true,
+    socketOptions: { keepAlive: 300 },
+    poolSize: 10
 });
+
+db = new Db('MongoLab-x4', server, {safe: true});
+OpenDb(CheckData);
+
+function OpenDb(callback) {
+    db.open(function(err, db) {
+        if(!err) {
+            console.log("Connected to 'winedb' database");
+            if(dbSettings.user && dbSettings.password){
+                console.log("authenticating to mongodb, user:" + dbSettings.user + " password:" + dbSettings.password);
+                db.authenticate(dbSettings.user, dbSettings.password, function(err){
+                    if(err){
+                        console.log('database authentication fail');
+                        return callback(err);
+                    }
+                    return callback(null, db);
+                });
+            }else{
+                return callback(null, db);
+            }
+        }
+        else
+        {
+            console.log(err);
+            throw err;
+        }
+    });
+}
+
+function CheckData(err, db) {
+    if (err) {
+        console.log("Error connecting: \r\n" + err);
+        throw err;
+    }
+
+    db.collection('wines', {safe:true}, function(err, collection) {
+        console.log('retrieved collection');
+        if (collection == null) {
+            console.log("The 'wines' collection doesn't exist. Creating it with sample data...");
+            populateDB();
+        }
+        else {
+            //console.log("found " + collection.items.length + " wines");
+        }
+    });
+}
 
 exports.findById = function(req, res) {
     var id = req.params.id;
     console.log('Retrieving wine: ' + id);
     db.collection('wines', function(err, collection) {
-        collection.findOne({'_id':new BSON.ObjectID(id)}, function(err, item) {
+        collection.findOne({'_id':new mongo.ObjectID(id)}, function(err, item) {
             res.send(item);
         });
     });
@@ -59,7 +110,7 @@ exports.updateWine = function(req, res) {
     console.log('Updating wine: ' + id);
     console.log(JSON.stringify(wine));
     db.collection('wines', function(err, collection) {
-        collection.update({'_id':new BSON.ObjectID(id)}, wine, {safe:true}, function(err, result) {
+        collection.update({'_id':new mongo.ObjectID(id)}, wine, {safe:true}, function(err, result) {
             if (err) {
                 console.log('Error updating wine: ' + err);
                 res.send({'error':'An error has occurred'});
@@ -75,7 +126,7 @@ exports.deleteWine = function(req, res) {
     var id = req.params.id;
     console.log('Deleting wine: ' + id);
     db.collection('wines', function(err, collection) {
-        collection.remove({'_id':new BSON.ObjectID(id)}, {safe:true}, function(err, result) {
+        collection.remove({'_id':new mongo.ObjectID(id)}, {safe:true}, function(err, result) {
             if (err) {
                 res.send({'error':'An error has occurred - ' + err});
             } else {
@@ -310,7 +361,13 @@ var populateDB = function() {
     }];
 
     db.collection('wines', function(err, collection) {
-        collection.insert(wines, {safe:true}, function(err, result) {});
+        collection.insert(wines, {safe:true}, function(err, result) {
+            if (err) {
+                console.log("Error inserting wines:\r\n" + err);
+                throw err;
+            }
+            console.log("Insert successful");
+        });
     });
 
 };
